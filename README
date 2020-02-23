@@ -1,0 +1,27 @@
+HOWTO Run FlowCaptureProcessor
+
+  * type blah blah blah
+  * processor will intake the flow capture and ingest all packets 
+  * processor will display all packets with records on the console, with a summary at the end
+
+-------------
+  
+Design / Scale Considerations
+
+I tried to make efficient use of memory and IO on a single thread.  Storing values in the smallest JVM type that would hold the unsigned values, as
+well as using buffered input.  Aggregating the packets was of concern, but Vector's are supposed to be very fast for appending ( whereas Lists 
+suck at appending in Scala).  I think I was pretty successful in writing all the core logic in a pure functional fashion.  
+
+Things I would consider moving forward with this project:
+
+1) Parallelism for scaling up.  The question is what the unit of work would be to parallelize on.  In this case, you might want to 
+   parallel the efforts on processing of individual packets, but since you have to read the header to know where the next packet begins,
+   it would be non trivial to chunk that out; seems like it would require stateful coordination between workers.  Maybe a pre-processor 
+   that locates the packet boundaries, but that doesn't seem right either.  
+   
+   Maybe the file itself, the flow_capture, would be a good thing to parallelize on.  If there were more than one capture file they could easily
+   be processed in parallel. 
+   
+2) Some asynchronous IO might also help, but would require some thinking about how to design for that.  If the flow capture files were quite 
+   large, perhaps there could be a layer that asynchronously reads some chunks size from the capture files with the Future containing the
+   IO operation triggering, on completion, the processing logic I have created, applied to each chunk parallel.    

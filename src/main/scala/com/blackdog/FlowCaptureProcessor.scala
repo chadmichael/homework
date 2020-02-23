@@ -19,31 +19,46 @@ object FlowCaptureProcessor extends App {
     val bufferSize = 64 * 1024
       
     // Using Scala ARM for higher level, safer management of resources
-    for(inputStream <- managed(new BufferedInputStream(new FileInputStream(filename), bufferSize))) {
-      processNetFlowPacket(inputStream)  
-    }
-    
+    for(inputStream <- managed(new BufferedInputStream(new FileInputStream(filename), bufferSize))) { 
+      val packets = processFlowCapture(inputStream)
+      
+      // NOTE: IO on the "EDGE" of the app to help with pureness      
+      // Display processed output
+      packets.foreach{ packet =>
+        println(packet)
+        println(packet.header)
+        packet.records.foreach(println)
+      }
+      
+      // Display totals
+      println("Total net flow packets processed = " + packets.size)
+      println("Total flow records processed = " + packets.map(_.header.count).reduce(_+_))
+    } 
   }
   
-  def processNetFlowPacket(bufferedInputStream: BufferedInputStream): NetFlowPacket = {
-    // Grab know size of header
+  def processFlowCapture(bufferedInputStream: BufferedInputStream): Vector[NetFlowPacket] = {
     val headerBytes = new Array[Byte](24)
-    bufferedInputStream.read(headerBytes) 
-    val wrappedBuffer = ByteBuffer.wrap(headerBytes)
+    var packets: Vector[NetFlowPacket] = Vector()
     
-    val packetHeader = processHeaderBytes(wrappedBuffer)
+    def readNextPacketHeader(): Unit = bufferedInputStream.read(headerBytes) match {
+      case -1 => println("zero bytes read")
+      case n => {
+        packets = packets :+ processNetFlowPacket(ByteBuffer.wrap(headerBytes), bufferedInputStream)  
+        readNextPacketHeader()
+      }
+    }  
+    readNextPacketHeader()
     
-    println("Processed packetHeader: " + packetHeader)
-    println("Now grabbing " + packetHeader.count + " records")
-    println("Total of " + packetHeader.payloadLength + " bytes")
-    
+    packets
+  }
+  
+  def processNetFlowPacket(headerBytes: ByteBuffer, bufferedInputStream: BufferedInputStream): NetFlowPacket = {
+    val packetHeader = processHeaderBytes(headerBytes)
     val payloadBytes = new Array[Byte](packetHeader.payloadLength)
     
     bufferedInputStream.read(payloadBytes)
-    val records: Array[NetFlowRecord] = processFlowRecords(ByteBuffer.wrap(payloadBytes), packetHeader.count)
-    
-    records.foreach(println)
-    
+    val records: Array[NetFlowRecord] = processFlowRecords(ByteBuffer.wrap(payloadBytes), packetHeader.count)  
+    //records.foreach(println)
     NetFlowPacket(packetHeader, records)
   }
   
@@ -58,18 +73,19 @@ object FlowCaptureProcessor extends App {
   }
   
   def processAFlowRecord(wrappedBytes: ByteBuffer): NetFlowRecord = {
+    import java.lang.{Short, Integer}
     val srcaddr = processIPAddress(wrappedBytes)
     val dstaddr = processIPAddress(wrappedBytes)
     val nexthop = processIPAddress(wrappedBytes)
     
-    val input = java.lang.Short.toUnsignedInt(wrappedBytes.getShort)
-    val output = java.lang.Short.toUnsignedInt(wrappedBytes.getShort)
-    val dPkts = java.lang.Integer.toUnsignedLong(wrappedBytes.getInt)
-    val dOctets = java.lang.Integer.toUnsignedLong(wrappedBytes.getInt)
-    val First = java.lang.Integer.toUnsignedLong(wrappedBytes.getInt)
-    val Last = java.lang.Integer.toUnsignedLong(wrappedBytes.getInt)
-    val srcport = java.lang.Short.toUnsignedInt(wrappedBytes.getShort)
-    val dstport = java.lang.Short.toUnsignedInt(wrappedBytes.getShort)
+    val input = Short.toUnsignedInt(wrappedBytes.getShort)
+    val output = Short.toUnsignedInt(wrappedBytes.getShort)
+    val dPkts = Integer.toUnsignedLong(wrappedBytes.getInt)
+    val dOctets = Integer.toUnsignedLong(wrappedBytes.getInt)
+    val First = Integer.toUnsignedLong(wrappedBytes.getInt)
+    val Last = Integer.toUnsignedLong(wrappedBytes.getInt)
+    val srcport = Short.toUnsignedInt(wrappedBytes.getShort)
+    val dstport = Short.toUnsignedInt(wrappedBytes.getShort)
     
     // throw out the mid record padding
     wrappedBytes.get
@@ -77,8 +93,8 @@ object FlowCaptureProcessor extends App {
     val tcp_flags = wrappedBytes.get
     val prot = wrappedBytes.get
     val tos = wrappedBytes.get
-    val src_as = java.lang.Short.toUnsignedInt(wrappedBytes.getShort)
-    val dst_as = java.lang.Short.toUnsignedInt(wrappedBytes.getShort)
+    val src_as = Short.toUnsignedInt(wrappedBytes.getShort)
+    val dst_as = Short.toUnsignedInt(wrappedBytes.getShort)
     val src_mask = wrappedBytes.get
     val dst_mask = wrappedBytes.get
     
@@ -108,7 +124,7 @@ object FlowCaptureProcessor extends App {
   
   def processIPAddress(wrappedBytes: ByteBuffer): IPAddress = {
     import java.lang.Byte
-    val octet1 = Byte.toUnsignedInt(wrappedBytes.get)  // TODO handle unsigned coversion?
+    val octet1 = Byte.toUnsignedInt(wrappedBytes.get)  
     val octet2 = Byte.toUnsignedInt(wrappedBytes.get)
     val octet3 = Byte.toUnsignedInt(wrappedBytes.get)
     val octet4 = Byte.toUnsignedInt(wrappedBytes.get)
@@ -116,15 +132,17 @@ object FlowCaptureProcessor extends App {
   }
   
   def processHeaderBytes(wrappedBytes: ByteBuffer): NetFlowHeader = {
+    import java.lang.{Integer, Short}
+    
     val version = wrappedBytes.getShort
     val count = wrappedBytes.getShort
-    val sysUpTime = java.lang.Integer.toUnsignedLong(wrappedBytes.getInt)
-    val unix_secs = java.lang.Integer.toUnsignedLong(wrappedBytes.getInt)
-    val unix_nsecs = java.lang.Integer.toUnsignedLong(wrappedBytes.getInt)
-    val flow_sequence = java.lang.Integer.toUnsignedLong(wrappedBytes.getInt)
+    val sysUpTime = Integer.toUnsignedLong(wrappedBytes.getInt)
+    val unix_secs = Integer.toUnsignedLong(wrappedBytes.getInt)
+    val unix_nsecs = Integer.toUnsignedLong(wrappedBytes.getInt)
+    val flow_sequence = Integer.toUnsignedLong(wrappedBytes.getInt)
     val engine_type = wrappedBytes.get
     val engine_id = wrappedBytes.get
-    val sampling_interval = java.lang.Short.toUnsignedInt(wrappedBytes.getShort)
+    val sampling_interval = Short.toUnsignedInt(wrappedBytes.getShort)
     
     NetFlowHeader(
       version, 
@@ -141,7 +159,9 @@ object FlowCaptureProcessor extends App {
   processRawNetFlowCapture
 }
 
-case class NetFlowPacket(header: NetFlowHeader, records: Array[NetFlowRecord])
+case class NetFlowPacket(header: NetFlowHeader, records: Array[NetFlowRecord]) {
+  override def toString() = "\n********** NetFlowPacket ************"
+}
     
 case class NetFlowHeader(
     version: Int,
@@ -155,6 +175,19 @@ case class NetFlowHeader(
     sampling_interval: Int) { 
   
   def payloadLength = count * 48
+  
+  override def toString() = {
+    "NetFlowHeader(" + 
+    "version: " + version + 
+    ", count: " + count + 
+    ", sysUpTime: " + sysUpTime +
+    ", unix_secs: " + unix_secs +
+    ", unix_nsecs: " + unix_nsecs +
+    ", flow_sequence: " + flow_sequence +
+    ", engine_type: " + engine_type +
+    ", engine_id: " + engine_id +
+    ", sampling_interval: " + sampling_interval + ")"
+  }
 }
 
 case class NetFlowRecord(
@@ -175,7 +208,30 @@ case class NetFlowRecord(
     src_as:    Int,
     dst_as:    Int,
     src_mask:  Byte,
-    dst_mask:  Byte)
+    dst_mask:  Byte) {
+  
+  override def toString() = {
+    "NetFlowRecord(" + 
+    "srcaddr: " + srcaddr + 
+    ", dstaddr: " + dstaddr + 
+    ", nexthop: " + nexthop +
+    ", input: " + input +
+    ", output: " + output +
+    ", dPkts: " + dPkts +
+    ", dOctets: " + dOctets +
+    ", First: " + First +
+    ", Last: " + Last + 
+    ", srcport: " + srcport + 
+    ", dstport: " + dstport + 
+    ", tcp_flags: " + tcp_flags + 
+    ", prot: " + prot + 
+    ", tos: " + tos + 
+    ", src_as: " + src_as + 
+    ", dst_as: " + dst_as + 
+    ", src_mask: " + src_mask + 
+    ", dst_mask: " + dst_mask + ")"
+  }  
+}
 
 case class IPAddress (
     octet1: Int,
@@ -184,5 +240,3 @@ case class IPAddress (
     octet4: Int) {
   override def toString = octet1 + "." + octet2 + "." + octet3 + "." + octet4
 }
-    
-    
