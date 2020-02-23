@@ -17,12 +17,12 @@ object FlowCaptureProcessor extends App {
     
     // TODO figure out optimal buffer size, based upon observation of actual performance on specific hardware and systems.  
     val bufferSize = 64 * 1024
-    val bufferedInputStream = 
       
     // Using Scala ARM for higher level, safer management of resources
     for(inputStream <- managed(new BufferedInputStream(new FileInputStream(filename), bufferSize))) {
       processNetFlowPacket(inputStream)  
     }
+    
   }
   
   def processNetFlowPacket(bufferedInputStream: BufferedInputStream): NetFlowPacket = {
