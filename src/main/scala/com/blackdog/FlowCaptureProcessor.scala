@@ -28,7 +28,7 @@ object FlowCaptureProcessor extends App {
   def processNetFlowPacket(bufferedInputStream: BufferedInputStream): NetFlowPacket = {
     // Grab know size of header
     val headerBytes = new Array[Byte](24)
-    bufferedInputStream.read(headerBytes, 0, 24) 
+    bufferedInputStream.read(headerBytes) 
     val wrappedBuffer = ByteBuffer.wrap(headerBytes)
     
     val packetHeader = processHeaderBytes(wrappedBuffer)
@@ -39,7 +39,7 @@ object FlowCaptureProcessor extends App {
     
     val payloadBytes = new Array[Byte](packetHeader.payloadLength)
     
-    bufferedInputStream.read(payloadBytes, 0, packetHeader.payloadLength)
+    bufferedInputStream.read(payloadBytes)
     val records: Array[NetFlowRecord] = processFlowRecords(ByteBuffer.wrap(payloadBytes), packetHeader.count)
     
     records.foreach(println)
