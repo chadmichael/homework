@@ -57,13 +57,13 @@ object FlowCaptureProcessor {
     val records = 
       for {
         _ <- 1 to recordCount
-        record = processAFlowRecord(wrappedBytes)
+        record = processFlowRecordBytes(wrappedBytes)
       } yield record
       
     records.toArray
   }
   
-  def processAFlowRecord(wrappedBytes: ByteBuffer): NetFlowRecord = {
+  def processFlowRecordBytes(wrappedBytes: ByteBuffer): NetFlowRecord = {
     import java.lang.{Short, Integer}
     val srcaddr = processIPAddress(wrappedBytes)
     val dstaddr = processIPAddress(wrappedBytes)
