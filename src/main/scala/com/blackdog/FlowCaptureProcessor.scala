@@ -4,25 +4,17 @@ import java.io.{FileInputStream, BufferedInputStream}
 import java.nio.ByteBuffer
 import resource._
 
-
-// TODO Parallelism?  I think it would require a fairly sophisticated addition to this code.  The main sticking point being that the length 
-// of the packets is only discovered as we process things.  In order to parallelize this, e.g. process packets in parallel, there would need 
-// to be a pre-processor that chunked out the raw packets by processing the header at least.  And then I'm not even sure this makes sense.  
-// It might be better to have multiple flow captures files and the parallelism would be on the raw file as the unit of work, rather than the 
-// packets themselves.  
-
-object FlowCaptureProcessor extends App {
-  def processRawNetFlowCapture = {
-    val filename = "flow_capture"
+class FlowCaptureProcessor (val filename: String) {
+ 
+  def processRawNetFlowCapture() = {
     
     // TODO figure out optimal buffer size, based upon observation of actual performance on specific hardware and systems.  
     val bufferSize = 64 * 1024
       
-    // Using Scala ARM for higher level, safer management of resources
+    // Using Scala ARM to manage resources
     for(inputStream <- managed(new BufferedInputStream(new FileInputStream(filename), bufferSize))) { 
       val packets = processFlowCapture(inputStream)
       
-      // NOTE: IO on the "EDGE" of the app to help with pureness      
       // Display processed output
       packets.foreach{ packet =>
         println(packet)
@@ -43,23 +35,18 @@ object FlowCaptureProcessor extends App {
     def readNextPacketHeader(): Unit = bufferedInputStream.read(headerBytes) match {
       case -1 => println("zero bytes read")
       case n => {
-        packets = packets :+ processNetFlowPacket(ByteBuffer.wrap(headerBytes), bufferedInputStream)  
+        val packetHeader = processHeaderBytes(ByteBuffer.wrap(headerBytes))
+        val payloadBytes = new Array[Byte](packetHeader.payloadLength)
+        bufferedInputStream.read(payloadBytes)
+        val records: Array[NetFlowRecord] = processFlowRecords(ByteBuffer.wrap(payloadBytes), packetHeader.count)  
+        packets = packets :+ NetFlowPacket(packetHeader, records) 
+        
         readNextPacketHeader()
       }
     }  
     readNextPacketHeader()
     
     packets
-  }
-  
-  def processNetFlowPacket(headerBytes: ByteBuffer, bufferedInputStream: BufferedInputStream): NetFlowPacket = {
-    val packetHeader = processHeaderBytes(headerBytes)
-    val payloadBytes = new Array[Byte](packetHeader.payloadLength)
-    
-    bufferedInputStream.read(payloadBytes)
-    val records: Array[NetFlowRecord] = processFlowRecords(ByteBuffer.wrap(payloadBytes), packetHeader.count)  
-    //records.foreach(println)
-    NetFlowPacket(packetHeader, records)
   }
   
   def processFlowRecords(wrappedBytes: ByteBuffer, recordCount: Int):Array[NetFlowRecord] = {
@@ -155,8 +142,6 @@ object FlowCaptureProcessor extends App {
       engine_id, 
       sampling_interval)
   }
-  
-  processRawNetFlowCapture
 }
 
 case class NetFlowPacket(header: NetFlowHeader, records: Array[NetFlowRecord]) {
