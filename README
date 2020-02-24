@@ -3,7 +3,7 @@ HOWTO Run FlowCaptureProcessor
   * Extract the zip archive
   * Execute one of the scripts in /bin, passing a single argument that points to a flow_capture
   
-      chadmichael@heraclitus:$ ./bin/netflowprocessor /home/chadmichael/century-link/flow_capture
+      chadmichael@heraclitus:$ ./bin/netflowprocessor /home/chadmichael/netflow/flow_capture
        
   * processor will intake the flow capture and ingest all packets 
   * processor will display all packets with records on the console, with a summary at the end
