@@ -5,6 +5,8 @@ import java.nio.ByteBuffer
 import resource._
 
 class FlowCaptureProcessor (val filename: String) {
+  
+  import FlowCaptureProcessor._
  
   def processRawNetFlowCapture() = {
     
@@ -48,8 +50,10 @@ class FlowCaptureProcessor (val filename: String) {
     
     packets
   }
-  
-  def processFlowRecords(wrappedBytes: ByteBuffer, recordCount: Int):Array[NetFlowRecord] = {
+}
+
+object FlowCaptureProcessor {
+   def processFlowRecords(wrappedBytes: ByteBuffer, recordCount: Int):Array[NetFlowRecord] = {
     val records = 
       for {
         _ <- 1 to recordCount
