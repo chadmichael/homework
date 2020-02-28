@@ -10,43 +10,52 @@ class FlowCaptureProcessor (val filename: String) {
  
   def processRawNetFlowCapture() = {
     
-    // TODO figure out optimal buffer size, based upon observation of actual performance on specific hardware and systems.  
+    // TODO figure out optimal buffer size, based upon observation of actual 
+    // performance on specific hardware and systems.  
     val bufferSize = 64 * 1024
       
     // Using Scala ARM to manage resources
     for(inputStream <- managed(new BufferedInputStream(new FileInputStream(filename), bufferSize))) { 
       val packets = processFlowCapture(inputStream)
       
-      // Display processed output
-      packets.foreach{ packet =>
-        println(packet)
-        println(packet.header)
-        packet.records.foreach(println)
-      }
-      
-      // Display totals
-      println("Total net flow packets processed = " + packets.size)
-      println("Total flow records processed = " + packets.map(_.header.count).reduce(_+_))
-    } 
+      displayOutputToConsole(packets) 
+    }
   }
   
+  private def displayOutputToConsole(packets: Vector[NetFlowPacket]) = {
+    println("Processing flows from capture file " + filename)
+    
+    packets.foreach{ packet =>
+      println(packet)
+      println(packet.header)
+      packet.records.foreach(println)
+    }
+      
+    println("Total net flow packets processed = " + packets.size)
+    println("Total flow records processed = " + packets.map(_.header.count).reduce(_+_))
+  } 
+  
+  // TODO Stream processing maybe?  Would this allow for mapping instead of recursion?
   def processFlowCapture(bufferedInputStream: BufferedInputStream): Vector[NetFlowPacket] = {
     val headerBytes = new Array[Byte](24)
     var packets: Vector[NetFlowPacket] = Vector()
     
-    def readNextPacketHeader(): Unit = bufferedInputStream.read(headerBytes) match {
-      case -1 => println("zero bytes read")
-      case n => {
-        val packetHeader = processHeaderBytes(ByteBuffer.wrap(headerBytes))
-        val payloadBytes = new Array[Byte](packetHeader.payloadLength)
-        bufferedInputStream.read(payloadBytes)
-        val records: Array[NetFlowRecord] = processFlowRecords(ByteBuffer.wrap(payloadBytes), packetHeader.count)  
-        packets = packets :+ NetFlowPacket(packetHeader, records) 
-        
-        readNextPacketHeader()
-      }
-    }  
-    readNextPacketHeader()
+    def processPacketHeader(): Unit = {
+      bufferedInputStream.read(headerBytes) match {
+        case -1 => ()
+        case n => {
+          // PRESUMES WELL FORMED CAPTURE WITH NO ERRORS ... TODO add sanity checks and error handling
+          val packetHeader = processHeaderBytes(ByteBuffer.wrap(headerBytes))
+          val payloadBytes = new Array[Byte](packetHeader.payloadLength)
+          bufferedInputStream.read(payloadBytes)
+          val records: Array[NetFlowRecord] = processFlowRecords(ByteBuffer.wrap(payloadBytes), packetHeader.count)  
+          packets = packets :+ NetFlowPacket(packetHeader, records) 
+          
+          processPacketHeader()
+        }
+      }  
+    }
+    processPacketHeader()
     
     packets
   }

@@ -2,8 +2,10 @@ package com.blackdog
 
 object FlowCaptureProcessorApp extends App {
   if (args.isEmpty) {
-    println("Requires argument that is a path to a valid flow capture file")
+    println("Usage: netflowprocessor capture_files ...")
+    println("  One or more paths to caputure files that should be processed.")
   } else {
-    new FlowCaptureProcessor(args(0)).processRawNetFlowCapture
+    for (arg <- args)
+      new FlowCaptureProcessor(arg).processRawNetFlowCapture
   }
 }
