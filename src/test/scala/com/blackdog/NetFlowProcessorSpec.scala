@@ -5,10 +5,25 @@ import FlowCaptureProcessor._
 import java.nio.ByteBuffer
 
 
-class NetFlowProcessorSpec extends FlatSpec with Matchers {
-  
+class NetFlowProcessorSpec extends FlatSpec with Matchers {  
   //coerce the higher unsigned values into a single byte 
   implicit def int2Byte(i: Int) = i.toByte
+  
+  "FlowCaptureProcessor.processIPAddress" should "process raw header bytes into an IPAddress" in {
+    val wrappedBytes: ByteBuffer = ByteBuffer.wrap(Array[Byte](
+        0xA8,
+        0x01,
+        0x03,
+        0xD0))
+        
+        val ipAddress: IPAddress = FlowCaptureProcessor.processIPAddress(wrappedBytes);
+    
+        assert(ipAddress.octet1 == 168)
+        assert(ipAddress.octet2 == 1)
+        assert(ipAddress.octet3 == 3)
+        assert(ipAddress.octet4 == 208)
+        assert(ipAddress.toString() == "168.1.3.208")
+  }
 
   "FlowCaptureProcessor.processHeaderBytes" should "process raw header bytes into NetFlowHeader" in {    
     val wrappedBytes: ByteBuffer = ByteBuffer.wrap(Array[Byte](

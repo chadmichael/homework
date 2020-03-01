@@ -40,7 +40,7 @@ class FlowCaptureProcessor (val filename: String) {
     val headerBytes = new Array[Byte](24)
     var packets: Vector[NetFlowPacket] = Vector()
     
-    def processPacketHeader(): Unit = {
+    def processAPacket(): Unit = {
       bufferedInputStream.read(headerBytes) match {
         case -1 => ()
         case n => {
@@ -51,18 +51,18 @@ class FlowCaptureProcessor (val filename: String) {
           val records: Array[NetFlowRecord] = processFlowRecords(ByteBuffer.wrap(payloadBytes), packetHeader.count)  
           packets = packets :+ NetFlowPacket(packetHeader, records) 
           
-          processPacketHeader()
+          processAPacket()
         }
       }  
     }
-    processPacketHeader()
+    processAPacket()
     
     packets
   }
 }
 
 object FlowCaptureProcessor {
-   def processFlowRecords(wrappedBytes: ByteBuffer, recordCount: Int):Array[NetFlowRecord] = {
+  def processFlowRecords(wrappedBytes: ByteBuffer, recordCount: Int):Array[NetFlowRecord] = {
     val records = 
       for {
         _ <- 1 to recordCount
